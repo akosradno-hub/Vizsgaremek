@@ -1,0 +1,127 @@
+: Saved
+:
+ASA Version 9.6(1)
+!
+hostname ASA1
+enable password DzaLrtot/vx63hrf encrypted
+names
+!
+interface GigabitEthernet1/1
+ nameif OUTSIDE
+ security-level 0
+ ip address 203.0.113.2 255.255.255.0
+!
+interface GigabitEthernet1/2
+ nameif DMZ
+ security-level 50
+ ip address 10.1.60.1 255.255.255.0
+ ipv6 address 2001:DB8:ACAD:10::1/64
+ ipv6 enable
+!
+interface GigabitEthernet1/3
+ nameif INSIDE_R1
+ security-level 100
+ ip address 10.1.1.1 255.255.255.252
+!
+interface GigabitEthernet1/4
+ nameif INSIDE_R2
+ security-level 100
+ ip address 10.1.2.1 255.255.255.252
+!
+interface GigabitEthernet1/5
+ no nameif
+ no security-level
+ no ip address
+ shutdown
+!
+interface GigabitEthernet1/6
+ no nameif
+ no security-level
+ no ip address
+ shutdown
+!
+interface GigabitEthernet1/7
+ no nameif
+ no security-level
+ no ip address
+ shutdown
+!
+interface GigabitEthernet1/8
+ no nameif
+ no security-level
+ no ip address
+ shutdown
+!
+interface Management1/1
+ management-only
+ no nameif
+ no security-level
+ no ip address
+ shutdown
+!
+object network DMZ
+ host 10.1.60.10
+ nat (DMZ,OUTSIDE) static 203.0.113.3
+object network INSIDE_R1
+ subnet 10.1.1.0 255.255.255.252
+ nat (INSIDE_R1,OUTSIDE) dynamic interface
+object network INSIDE_R2
+ subnet 10.1.2.0 255.255.255.252
+ nat (INSIDE_R2,OUTSIDE) dynamic interface
+!
+route OUTSIDE 0.0.0.0 0.0.0.0 203.0.113.1 1
+!
+access-list ICMPACL extended permit icmp any any
+access-list VPN_FORGALOM extended permit ip 10.1.0.0 255.255.0.0 10.3.0.0 255.255.0.0
+access-list DMZ extended permit tcp any host 10.1.60.10 eq www
+access-list DMZ extended permit tcp any host 10.1.60.10 eq 443
+access-list IPV6_DMZ extended permit ip any any
+!
+!
+access-group IPV6_DMZ in interface OUTSIDE
+access-group ICMPACL in interface DMZ
+!
+!
+class-map inspection_default
+ match default-inspection-traffic
+!
+policy-map type inspect dns preset_dns_map
+ parameters
+  message-length maximum 512
+policy-map global_policy
+ class inspection_default
+  inspect dns preset_dns_map
+  inspect ftp 
+  inspect icmp 
+  inspect tftp 
+policy-map global-policy
+ class inspection_default
+!
+service-policy global_policy global
+!
+telnet timeout 5
+ssh timeout 5
+!
+!
+crypto ipsec ikev1 transform-set VPN-SET esp-aes esp-sha-hmac
+!
+crypto map VPN-MAP 10 match address VPN_FORGALOM
+crypto map VPN-MAP 10 set peer 203.0.115.1 
+crypto map VPN-MAP 10 set ikev1 transform-set VPN-SET 
+crypto map VPN-MAP interface OUTSIDE
+crypto ikev1 enable OUTSIDE
+crypto ikev1 policy 10
+ encr aes
+ authentication pre-share
+ group 2
+!
+tunnel-group 203.0.115.1 type ipsec-l2l
+tunnel-group 203.0.115.1 ipsec-attributes
+ ikev1 pre-shared-key cisco123
+!
+router ospf 1
+ log-adjacency-changes
+ network 10.1.1.0 255.255.255.252 area 0
+ network 10.1.2.0 255.255.255.252 area 0
+ default-information originate
+!
